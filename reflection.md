@@ -2,6 +2,14 @@
 
 ## 1. System Design
 
+Your final app should:
+
+- Let a user enter basic owner + pet info
+- Let a user add/edit tasks (duration + priority at minimum)
+- Generate a daily schedule/plan based on constraints and priorities
+- Display the plan clearly (and ideally explain the reasoning)
+- Include tests for the most important scheduling behaviors
+
 **a. Initial design**
 
 - Briefly describe your initial UML design.

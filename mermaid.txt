@@ -1,0 +1,51 @@
+classDiagram
+    class Owner {
+        -name: str
+        -available_hours_per_day: float
+        -preferred_activity_times: list
+        -preferences: dict
+        +get_available_time() float
+        +get_preference(key) any
+        +set_preference(key, value) void
+    }
+
+    class Pet {
+        -name: str
+        -species: str
+        -age: int
+        -special_needs: list
+        -care_requirements: dict
+        +get_required_tasks() list
+        +add_special_need(need) void
+        +get_health_info() str
+    }
+
+    class Task {
+        -title: str
+        -duration_minutes: int
+        -priority: str
+        -task_type: str
+        -required_time: str
+        -dependencies: list
+        +get_duration() int
+        +is_urgent() bool
+    }
+
+    class Schedule {
+        -owner: Owner
+        -pet: Pet
+        -tasks: list
+        -daily_plan: list
+        -start_time: str
+        -end_time: str
+        +add_task(task) void
+        +generate_schedule() list
+        +can_schedule_at(task, time) bool
+        +get_plan_with_reasoning() str
+    }
+
+    Owner "1" --> "*" Pet: has
+    Pet "1" --> "*" Task: requires
+    Schedule --> Owner: uses constraints
+    Schedule --> Pet: schedules for
+    Schedule --> Task: arranges
