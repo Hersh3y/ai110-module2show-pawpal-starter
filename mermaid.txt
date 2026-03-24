@@ -15,7 +15,9 @@ classDiagram
         -age: int
         -special_needs: list
         -care_requirements: dict
+        -tasks: list
         +get_required_tasks() list
+        +add_task(task) void
         +add_special_need(need) void
         +get_health_info() str
     }

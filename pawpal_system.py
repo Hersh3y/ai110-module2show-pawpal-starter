@@ -29,9 +29,14 @@ class Pet:
     age: int
     special_needs: List[str] = field(default_factory=list)  # e.g., ["medication at 9am", "sensitive to heat"]
     care_requirements: Dict[str, Any] = field(default_factory=dict)  # species-specific defaults
+    tasks: List[Task] = field(default_factory=list)  # all tasks associated with this pet
 
     def get_required_tasks(self) -> List[Task]:
-        """Returns mandatory tasks based on species and special needs."""
+        """Returns all tasks for this pet."""
+        pass
+
+    def add_task(self, task: Task) -> None:
+        """Adds a task to this pet's task list."""
         pass
 
     def add_special_need(self, need: str) -> None:
