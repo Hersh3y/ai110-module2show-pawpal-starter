@@ -4,6 +4,9 @@ classDiagram
         -available_hours_per_day: float
         -preferred_activity_times: list
         -preferences: dict
+        -pets: list
+        +add_pet(pet) void
+        +get_all_tasks() list
         +get_available_time() float
         +get_preference(key) any
         +set_preference(key, value) void
@@ -24,13 +27,17 @@ classDiagram
 
     class Task {
         -title: str
+        -description: str
         -duration_minutes: int
         -priority: str
         -task_type: str
+        -frequency: str
         -required_time: str
+        -completion_status: bool
         -dependencies: list
         +get_duration() int
         +is_urgent() bool
+        +mark_complete() void
     }
 
     class Schedule {
