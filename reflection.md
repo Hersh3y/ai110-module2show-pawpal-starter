@@ -30,7 +30,7 @@ Your final app should:
     Yes. The initial design had Pet with a get_required_tasks() method that was unclear about what "required" meant (mandatory vs. all tasks).
 
 - If yes, describe at least one change and why you made it.
-    Change: Added a tasks attribute to Pet to store all tasks directly, and added an add_task() method. This clarifies that Pet is responsible for managing its own task list. It makes it so that each specific pet has its own specific tasks.
+    I added a tasks attribute to Pet to store all tasks directly, and added an add_task() method. This clarifies that Pet is responsible for managing its own task list. It makes it so that each specific pet has its own specific tasks.
 
 ---
 
@@ -39,12 +39,18 @@ Your final app should:
 **a. Constraints and priorities**
 
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
+    The scheduler considers: (1) Operating hours (start_time, end_time), (2) Task priority, (3) Task urgency, (4) Owner's available hours per day, (5) Task duration, and (6) Conflict avoidance.
+
 - How did you decide which constraints mattered most?
+    I prioritized urgency first, then priority level, then duration (longer tasks scheduled in better slots). This ensures that critcal tasks are never missed.
 
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
+    The scheduler detects conflicts after the schedule generation and not DURING. This means the generate_schedule() method builds a plan without preventing conflicts, and then detect_conflicts() identifies problems after the fact.
+
 - Why is that tradeoff reasonable for this scenario?
+    It's a simpler design that separates schedule generation from validation and allows fast scheduling and multiple conflict detection strategies. The scheduler may generate invalid plans, but this is acceptable because pet care tasks are flexible, owners get warnings to adjust, and full optimization would be overkill for a daily plan.
 
 ---
 

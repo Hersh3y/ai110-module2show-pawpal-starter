@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 
 def parse_time(time_str: str) -> datetime:
@@ -37,6 +37,7 @@ class Task:
     required_time: Optional[str] = None  # e.g., "9:00am" for time-sensitive tasks
     completion_status: bool = False  # tracks whether task is completed
     dependencies: List[str] = field(default_factory=list)  # titles of tasks that must happen first
+    task_date: Optional[datetime] = None  # tracks when this task instance is scheduled for
 
     def get_duration(self) -> int:
         """Returns duration of task in minutes."""
@@ -74,6 +75,64 @@ class Pet:
         if need not in self.special_needs:
             self.special_needs.append(need)
 
+    def mark_task_complete(self, task_title: str) -> bool:
+        """Marks a task as complete. If recurring, creates next instance.
+        
+        Uses timedelta to calculate the next occurrence date accurately:
+        - Daily tasks: current_date + timedelta(days=1)
+        - Weekly tasks: current_date + timedelta(days=7)
+        
+        Args:
+            task_title: The title of the task to mark complete.
+            
+        Returns:
+            bool: True if task was found and marked complete, False otherwise.
+        """
+        for task in self.tasks:
+            if task.title == task_title:
+                task.mark_complete()
+                
+                # If task is recurring, create a new instance for the next occurrence
+                if task.frequency in ["daily", "weekly"]:
+                    days_to_add = 1 if task.frequency == "daily" else 7
+                    
+                    # Calculate next occurrence date using timedelta
+                    # If task_date exists, use it; otherwise use today's date
+                    if task.task_date:
+                        # Extract just the date part and add days
+                        current_date = task.task_date if isinstance(task.task_date, date) else task.task_date.date()
+                        next_date = datetime.combine(
+                            current_date + timedelta(days=days_to_add),
+                            datetime.min.time()
+                        )
+                    else:
+                        # Use today's date and add the offset
+                        today = datetime.now().date()
+                        next_date = datetime.combine(
+                            today + timedelta(days=days_to_add),
+                            datetime.min.time()
+                        )
+                    
+                    # Create new task instance for next occurrence
+                    next_task = Task(
+                        title=task.title,
+                        description=task.description,
+                        duration_minutes=task.duration_minutes,
+                        priority=task.priority,
+                        task_type=task.task_type,
+                        frequency=task.frequency,
+                        required_time=task.required_time,
+                        completion_status=False,
+                        dependencies=task.dependencies,
+                        task_date=next_date
+                    )
+                    self.tasks.append(next_task)
+                    return True
+                
+                return True
+        
+        return False
+
     def get_health_info(self) -> str:
         """Returns relevant health/care notes for this pet."""
         info = f"{self.name} is a {self.age}-year-old {self.species}.\n"
@@ -109,6 +168,37 @@ class Owner:
         for pet in self.pets:
             all_tasks.extend(pet.get_required_tasks())
         return all_tasks
+
+    def filter_tasks(self, 
+                     pet_name: Optional[str] = None, 
+                     completion_status: Optional[bool] = None) -> List[Task]:
+        """Filters tasks by pet name and/or completion status.
+        
+        Args:
+            pet_name: Optional pet name to filter by. If None, includes all pets.
+            completion_status: Optional bool to filter by. 
+                              True = completed tasks, False = incomplete, None = all.
+        
+        Returns:
+            List[Task]: Filtered list of tasks matching the criteria.
+        """
+        filtered_tasks = []
+        
+        # Filter by pet name if specified
+        if pet_name:
+            for pet in self.pets:
+                if pet.name == pet_name:
+                    filtered_tasks.extend(pet.get_required_tasks())
+        else:
+            # Include all pets if no pet_name specified
+            filtered_tasks = self.get_all_tasks()
+        
+        # Filter by completion status if specified
+        if completion_status is not None:
+            filtered_tasks = [task for task in filtered_tasks 
+                            if task.completion_status == completion_status]
+        
+        return filtered_tasks
 
     def get_available_time(self) -> float:
         """Returns available hours per day for pet care."""
@@ -158,6 +248,28 @@ class Schedule:
             return (-urgency, -priority_value, -task.duration_minutes)
         
         return sorted(self.tasks, key=sort_key)
+
+    def sort_by_time(self) -> List[Task]:
+        """Sorts tasks by their required_time attribute (HH:MM format).
+        
+        Uses a lambda function to convert time strings to minutes for numeric comparison.
+        Tasks with no required_time are placed at the end.
+        
+        Returns:
+            List[Task]: Tasks sorted chronologically by required_time.
+        """
+        # Separate tasks with required_time from those without
+        tasks_with_time = [task for task in self.tasks if task.required_time]
+        tasks_without_time = [task for task in self.tasks if not task.required_time]
+        
+        # Sort tasks with required_time using lambda to convert time strings to minutes
+        sorted_tasks_with_time = sorted(
+            tasks_with_time,
+            key=lambda task: time_to_minutes(task.required_time)
+        )
+        
+        # Combine: time-sorted tasks first, then tasks without required_time
+        return sorted_tasks_with_time + tasks_without_time
 
     def can_schedule_at(self, task: Task, time_minutes: int) -> bool:
         """Checks if a task can be scheduled at a given time (in minutes since midnight)."""
@@ -234,4 +346,255 @@ class Schedule:
         output += f"Total tasks scheduled: {len(self.daily_plan)}"
         
         return output
+
+    def detect_conflicts(self, buffer_minutes: int = 5) -> Dict[str, List[str]]:
+        """Detects scheduling conflicts in the daily plan.
+        
+        Identifies:
+        - Hard conflicts: Tasks that directly overlap in time
+        - Soft conflicts: Tasks with less than buffer_minutes between them
+        
+        Args:
+            buffer_minutes: Minimum gap between tasks to avoid soft conflict warning.
+            
+        Returns:
+            Dict with 'hard' and 'soft' keys, each containing list of conflict descriptions.
+        """
+        conflicts = {"hard": [], "soft": []}
+        
+        if not self.daily_plan:
+            return conflicts
+        
+        # Create list of task events with their times
+        task_events = []
+        for idx, (task, time_str) in enumerate(self.daily_plan):
+            start = time_to_minutes(time_str)
+            end = start + task.duration_minutes
+            task_events.append({
+                "idx": idx,
+                "title": task.title,
+                "pet": self.pet.name,
+                "start": start,
+                "end": end
+            })
+        
+        # Check each pair of tasks for conflicts
+        for i in range(len(task_events)):
+            for j in range(i + 1, len(task_events)):
+                task_i = task_events[i]
+                task_j = task_events[j]
+                
+                # Check for hard conflict (overlap)
+                if task_i["start"] < task_j["end"] and task_i["end"] > task_j["start"]:
+                    conflicts["hard"].append(
+                        f"[OVERLAP] '{task_i['title']}' ({minutes_to_time(task_i['start'])}-"
+                        f"{minutes_to_time(task_i['end'])}) overlaps with "
+                        f"'{task_j['title']}' ({minutes_to_time(task_j['start'])}-"
+                        f"{minutes_to_time(task_j['end'])})"
+                    )
+                
+                # Check for soft conflict (tight gap)
+                elif task_i["end"] <= task_j["start"]:
+                    gap = task_j["start"] - task_i["end"]
+                    if gap < buffer_minutes:
+                        conflicts["soft"].append(
+                            f"[TIGHT] Only {gap} min gap between '{task_i['title']}' "
+                            f"(ends {minutes_to_time(task_i['end'])}) and "
+                            f"'{task_j['title']}' (starts {minutes_to_time(task_j['start'])})"
+                        )
+        
+        return conflicts
+
+    def get_conflict_warnings(self, buffer_minutes: int = 5) -> List[str]:
+        """Lightweight conflict detection that returns warning messages (non-fatal).
+        
+        Returns formatted warning strings for both hard and soft conflicts.
+        Never crashes - catches errors and continues gracefully.
+        
+        Args:
+            buffer_minutes: Minimum gap between tasks to trigger soft conflict warning.
+            
+        Returns:
+            List[str]: Warning messages (empty if no conflicts).
+        """
+        warnings = []
+        
+        try:
+            # Early exit: no tasks to check
+            if not self.daily_plan or len(self.daily_plan) < 2:
+                return warnings
+            
+            # Check each pair of consecutive and non-consecutive tasks
+            for i in range(len(self.daily_plan)):
+                for j in range(i + 1, len(self.daily_plan)):
+                    try:
+                        task_i, time_i_str = self.daily_plan[i]
+                        task_j, time_j_str = self.daily_plan[j]
+                        
+                        # Skip if either task missing required_time
+                        if not time_i_str or not time_j_str:
+                            continue
+                        
+                        # Calculate times safely
+                        start_i = time_to_minutes(time_i_str)
+                        end_i = start_i + task_i.duration_minutes
+                        start_j = time_to_minutes(time_j_str)
+                        end_j = start_j + task_j.duration_minutes
+                        
+                        # Hard conflict: direct overlap
+                        if start_i < end_j and end_i > start_j:
+                            warnings.append(
+                                f"⚠ CONFLICT: '{task_i.title}' and '{task_j.title}' "
+                                f"overlap at {minutes_to_time(max(start_i, start_j))}"
+                            )
+                        
+                        # Soft conflict: tasks back-to-back with tight gap
+                        elif end_i <= start_j:
+                            gap = start_j - end_i
+                            if gap < buffer_minutes:
+                                warnings.append(
+                                    f"[WARN] WARNING: Only {gap}m between '{task_i.title}' "
+                                    f"and '{task_j.title}' - tight scheduling"
+                                )
+                    
+                    except (ValueError, TypeError) as e:
+                        # Skip this pair if time parsing fails
+                        continue
+        
+        except Exception as e:
+            # Catch-all: never crashes, just log issue
+            warnings.append(f"[ERROR] Could not fully analyze schedule: {str(e)}")
+        
+        return warnings
+
+    def get_cross_pet_warnings(self, buffer_minutes: int = 5) -> List[str]:
+        """Lightweight cross-pet conflict detection returning warning messages (non-fatal).
+        
+        Checks if owner can realistically manage multiple pets during their scheduled tasks.
+        Never crashes - catches errors and continues gracefully.
+        
+        Args:
+            buffer_minutes: Minimum gap between tasks for different pets.
+            
+        Returns:
+            List[str]: Warning messages (empty if no cross-pet issues).
+        """
+        warnings = []
+        
+        try:
+            # Early exit: only one pet
+            if not self.owner.pets or len(self.owner.pets) < 2:
+                return warnings
+            
+            # Collect active tasks with times across all pets
+            pet_tasks = []
+            for pet in self.owner.pets:
+                for task in pet.get_required_tasks():
+                    if task.required_time:
+                        pet_tasks.append({
+                            "pet": pet.name,
+                            "title": task.title,
+                            "start": time_to_minutes(task.required_time),
+                            "end": time_to_minutes(task.required_time) + task.duration_minutes
+                        })
+            
+            # Early exit: no tasks with times
+            if len(pet_tasks) < 2:
+                return warnings
+            
+            # Check for conflicts between different pets
+            for i in range(len(pet_tasks)):
+                for j in range(i + 1, len(pet_tasks)):
+                    try:
+                        t_i = pet_tasks[i]
+                        t_j = pet_tasks[j]
+                        
+                        # Skip same pet
+                        if t_i["pet"] == t_j["pet"]:
+                            continue
+                        
+                        # Hard conflict: tasks overlap
+                        if t_i["start"] < t_j["end"] and t_i["end"] > t_j["start"]:
+                            warnings.append(
+                                f"[CROSS-PET] CONFLICT: {t_i['pet']} ({t_i['title']}) "
+                                f"overlaps with {t_j['pet']} ({t_j['title']}) at "
+                                f"{minutes_to_time(max(t_i['start'], t_j['start']))}"
+                            )
+                        
+                        # Soft conflict: tight gap between switching pets
+                        elif t_i["end"] <= t_j["start"]:
+                            gap = t_j["start"] - t_i["end"]
+                            if gap < buffer_minutes:
+                                warnings.append(
+                                    f"[TIGHT] TRANSITION: Only {gap}m from {t_i['pet']} "
+                                    f"to {t_j['pet']} - may be unrealistic"
+                                )
+                    
+                    except (ValueError, TypeError, KeyError):
+                        continue
+        
+        except Exception as e:
+            warnings.append(f"[ERROR] Could not analyze cross-pet schedule: {str(e)}")
+        
+        return warnings
+
+    def detect_cross_pet_conflicts(self, buffer_minutes: int = 5) -> Dict[str, List[str]]:
+        """Detects scheduling conflicts across all pets for the same owner.
+        
+        Compares scheduled tasks across different pets to identify time conflicts
+        that the owner would face (when managing multiple pets simultaneously).
+        
+        Args:
+            buffer_minutes: Minimum gap between tasks to avoid soft conflict warning.
+            
+        Returns:
+            Dict with 'hard' and 'soft' keys, each containing conflict descriptions.
+        """
+        conflicts = {"hard": [], "soft": []}
+        
+        if not self.owner.pets or len(self.owner.pets) < 2:
+            return conflicts
+        
+        # Collect all scheduled tasks across all pets
+        all_tasks = []
+        for pet in self.owner.pets:
+            for task in pet.get_required_tasks():
+                if task.required_time:
+                    all_tasks.append({
+                        "title": task.title,
+                        "pet": pet.name,
+                        "start": time_to_minutes(task.required_time),
+                        "end": time_to_minutes(task.required_time) + task.duration_minutes
+                    })
+        
+        # Check each pair of tasks from different pets
+        for i in range(len(all_tasks)):
+            for j in range(i + 1, len(all_tasks)):
+                task_i = all_tasks[i]
+                task_j = all_tasks[j]
+                
+                # Only check if tasks are for different pets
+                if task_i["pet"] == task_j["pet"]:
+                    continue
+                
+                # Check for hard conflict (overlap)
+                if task_i["start"] < task_j["end"] and task_i["end"] > task_j["start"]:
+                    conflicts["hard"].append(
+                        f"[CROSS-PET OVERLAP] Owner must manage '{task_i['title']}' ({task_i['pet']}) "
+                        f"({minutes_to_time(task_i['start'])}-{minutes_to_time(task_i['end'])}) "
+                        f"at same time as '{task_j['title']}' ({task_j['pet']}) "
+                        f"({minutes_to_time(task_j['start'])}-{minutes_to_time(task_j['end'])})"
+                    )
+                
+                # Check for soft conflict (tight gap)
+                elif task_i["end"] <= task_j["start"]:
+                    gap = task_j["start"] - task_i["end"]
+                    if gap < buffer_minutes:
+                        conflicts["soft"].append(
+                            f"[CROSS-PET TIGHT] Only {gap} min to transition from "
+                            f"'{task_i['title']}' ({task_i['pet']}, ends {minutes_to_time(task_i['end'])}) "
+                            f"to '{task_j['title']}' ({task_j['pet']}, starts {minutes_to_time(task_j['start'])})"
+                        )
+        
+        return conflicts
 

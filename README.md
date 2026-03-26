@@ -22,6 +22,19 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Smarter Scheduling
+
+PawPal+ implements sophisticated scheduling algorithms and conflict detection:
+
+- **Priority-based Sorting**: Tasks sorted by urgency (time-sensitive first), priority level (high → medium → low), and duration
+- **Task Filtering**: Filter tasks by pet, completion status, or both using flexible multi-criteria filtering
+- **Recurring Task Auto-Creation**: Daily/weekly tasks automatically spawn the next occurrence when marked complete, using accurate date arithmetic with `timedelta`
+- **Dual Conflict Detection**: 
+  - Detailed analysis (dict-based) identifies hard conflicts (overlaps) and soft conflicts (tight scheduling gaps)
+  - Lightweight warnings (string-based) provide non-fatal alerts that never crash, gracefully handling parsing errors
+- **Cross-Pet Scheduling**: Detects conflicts across multiple pets, ensuring owner can realistically manage the entire schedule
+- **Comprehensive Testing**: 21 test cases covering sorting, filtering, task completion, recurring creation, and both conflict detection strategies
+
 ## Getting started
 
 ### Setup

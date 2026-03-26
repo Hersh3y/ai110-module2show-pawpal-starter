@@ -7,6 +7,7 @@ classDiagram
         -pets: list
         +add_pet(pet) void
         +get_all_tasks() list
+        +filter_tasks(pet_name, completion_status) list
         +get_available_time() float
         +get_preference(key) any
         +set_preference(key, value) void
@@ -21,6 +22,7 @@ classDiagram
         -tasks: list
         +get_required_tasks() list
         +add_task(task) void
+        +mark_task_complete(task_title) bool
         +add_special_need(need) void
         +get_health_info() str
     }
@@ -35,6 +37,7 @@ classDiagram
         -required_time: str
         -completion_status: bool
         -dependencies: list
+        -task_date: datetime
         +get_duration() int
         +is_urgent() bool
         +mark_complete() void
@@ -48,9 +51,15 @@ classDiagram
         -start_time: str
         -end_time: str
         +add_task(task) void
+        +sort_by_time() list
+        -_sort_tasks_by_priority() list
         +generate_schedule() list
         +can_schedule_at(task, time) bool
         +get_plan_with_reasoning() str
+        +detect_conflicts(buffer_minutes) dict
+        +get_conflict_warnings(buffer_minutes) list
+        +detect_cross_pet_conflicts(buffer_minutes) dict
+        +get_cross_pet_warnings(buffer_minutes) list
     }
 
     Owner "1" --> "*" Pet: has
