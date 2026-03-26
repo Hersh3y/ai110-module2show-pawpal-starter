@@ -56,7 +56,7 @@ Your final app should:
 
 ## 📸 Demo
 
-<a href="/course_images/ai110/demo.png" target="_blank"><img src='/course_images/ai110/demo.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+<a href="demo.png" target="_blank"><img src='demo.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
 
 ## Smarter Scheduling
 
