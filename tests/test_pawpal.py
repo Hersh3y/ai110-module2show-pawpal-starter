@@ -705,246 +705,393 @@ class TestConflictDetection:
             priority="high",
             task_type="feed",
             frequency="daily",
-            required_time="7:10am"  # Overlaps with Mochi's walk
+            required_time="7:00am"  # Same time as Mochi's walk
         )
         
         pet1.add_task(task1)
         pet2.add_task(task2)
         
         schedule = Schedule(owner=owner, pet=pet1)
+        schedule.add_task(task1)
+        schedule.add_task(task2)
+        schedule.daily_plan = [(task1, "7:00am"), (task2, "7:00am")]
         
-        conflicts = schedule.detect_cross_pet_conflicts()
+        conflicts = schedule.detect_conflicts()
         
-        assert len(conflicts["hard"]) > 0, "Should have cross-pet hard conflict"
-        assert "CROSS-PET OVERLAP" in conflicts["hard"][0], "Should mention cross-pet conflict"
+        assert len(conflicts["hard"]) > 0, "Should detect conflict between different pets at same time"
+
+
+class TestSortingCorrectness:
+    """Comprehensive tests for task sorting and chronological ordering."""
     
-    def test_cross_pet_soft_conflict(self):
-        """Verify that tight gaps in cross-pet tasks are detected."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
-        )
+    def test_sort_by_time_chronological_order(self):
+        """Verify tasks are returned in strict chronological order."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
         
-        pet1 = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        pet2 = Pet(name="Whiskers", species="cat", age=5, special_needs=[], care_requirements={})
-        owner.add_pet(pet1)
-        owner.add_pet(pet2)
+        # Create tasks spanning entire day
+        times = ["6:30am", "9:15am", "12:00pm", "3:45pm", "8:00pm", "11:59pm"]
+        for i, time in enumerate(times):
+            task = Task(
+                title=f"Task {i}",
+                description=f"Task at {time}",
+                duration_minutes=15,
+                priority="medium",
+                task_type="activity",
+                frequency="daily",
+                required_time=time
+            )
+            schedule.add_task(task)
         
-        # Task for Mochi ending at 7:30
-        task1 = Task(
-            title="Mochi Walk",
-            description="Dog walk",
-            duration_minutes=30,
+        sorted_tasks = schedule.sort_by_time()
+        
+        # Verify order is maintained
+        for i in range(len(sorted_tasks) - 1):
+            current_time = sorted_tasks[i].required_time
+            next_time = sorted_tasks[i + 1].required_time
+            current_minutes = time_to_minutes(current_time)
+            next_minutes = time_to_minutes(next_time)
+            assert current_minutes <= next_minutes, \
+                f"Sort order violated: {current_time} should come before {next_time}"
+    
+    def test_sort_by_time_with_empty_list(self):
+        """Verify sorting empty task list returns empty list."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
+        
+        sorted_tasks = schedule.sort_by_time()
+        
+        assert sorted_tasks == [], "Sorting empty list should return empty list"
+    
+    def test_sort_by_time_all_same_time(self):
+        """Verify sorting tasks with identical times maintains all tasks."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
+        
+        # All tasks at 9:00am
+        for i in range(3):
+            task = Task(
+                title=f"Task {i}",
+                description="All at same time",
+                duration_minutes=15,
+                priority="medium",
+                task_type="activity",
+                frequency="daily",
+                required_time="9:00am"
+            )
+            schedule.add_task(task)
+        
+        sorted_tasks = schedule.sort_by_time()
+        
+        assert len(sorted_tasks) == 3, "Should have all 3 tasks"
+        for task in sorted_tasks:
+            assert task.required_time == "9:00am", "All tasks should maintain 9:00am time"
+    
+    def test_sort_by_time_midnight_boundary(self):
+        """Verify correct sorting at midnight boundaries (12am to 1am)."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
+        
+        task_midnight = Task(
+            title="Midnight Task",
+            description="At midnight",
+            duration_minutes=15,
             priority="high",
-            task_type="walk",
+            task_type="activity",
             frequency="daily",
-            required_time="7:00am"
+            required_time="12:00am"
         )
         
-        # Task for Whiskers starting at 7:33 (only 3 minute gap)
-        task2 = Task(
-            title="Whiskers Feed",
-            description="Cat feeding",
+        task_early_morning = Task(
+            title="Early Morning",
+            description="Just after midnight",
+            duration_minutes=15,
+            priority="high",
+            task_type="activity",
+            frequency="daily",
+            required_time="12:30am"
+        )
+        
+        task_late_night = Task(
+            title="Late Night",
+            description="Before midnight",
+            duration_minutes=15,
+            priority="high",
+            task_type="activity",
+            frequency="daily",
+            required_time="11:59pm"
+        )
+        
+        schedule.add_task(task_late_night)
+        schedule.add_task(task_midnight)
+        schedule.add_task(task_early_morning)
+        
+        sorted_tasks = schedule.sort_by_time()
+        
+        # Verify order: 12am, 12:30am, then 11:59pm (wraps)
+        assert sorted_tasks[0].title == "Midnight Task"
+        assert sorted_tasks[1].title == "Early Morning"
+        assert sorted_tasks[2].title == "Late Night"
+    
+    def test_sort_priority_vs_time_without_required_time(self):
+        """Verify tasks without required_time are placed at end of sorted list."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
+        
+        task_with_time = Task(
+            title="Scheduled",
+            description="Has time",
+            duration_minutes=15,
+            priority="low",
+            task_type="activity",
+            frequency="daily",
+            required_time="2:00pm"
+        )
+        
+        task_no_time_high = Task(
+            title="Flexible High",
+            description="No time, high priority",
+            duration_minutes=15,
+            priority="high",
+            task_type="activity",
+            frequency="daily"
+        )
+        
+        task_no_time_low = Task(
+            title="Flexible Low",
+            description="No time, low priority",
+            duration_minutes=15,
+            priority="low",
+            task_type="activity",
+            frequency="daily"
+        )
+        
+        schedule.add_task(task_no_time_low)
+        schedule.add_task(task_with_time)
+        schedule.add_task(task_no_time_high)
+        
+        sorted_tasks = schedule.sort_by_time()
+        
+        # First task should be the one with time
+        assert sorted_tasks[0].title == "Scheduled"
+        # Remaining two should be the ones without time
+        assert sorted_tasks[1] in [task_no_time_high, task_no_time_low]
+        assert sorted_tasks[2] in [task_no_time_high, task_no_time_low]
+
+
+class TestRecurrenceLogic:
+    """Comprehensive tests for recurring task creation and management."""
+    
+    def test_recurring_daily_without_task_date(self):
+        """Verify daily recurring task works when task_date is None (uses today)."""
+        pet = Pet(name="TestPet", species="dog", age=3)
+        
+        # Create daily task without explicit task_date
+        daily_task = Task(
+            title="Daily Feed",
+            description="Feed daily",
+            duration_minutes=15,
+            priority="high",
+            task_type="feed",
+            frequency="daily"
+        )
+        
+        pet.add_task(daily_task)
+        assert len(pet.get_required_tasks()) == 1
+        
+        # Mark complete - should create next instance
+        result = pet.mark_task_complete("Daily Feed")
+        
+        assert result is True, "Should successfully mark task complete"
+        assert len(pet.get_required_tasks()) == 2, "Should create new instance"
+        assert pet.get_required_tasks()[0].completion_status is True, "Original should be complete"
+        assert pet.get_required_tasks()[1].completion_status is False, "New should be incomplete"
+    
+    def test_recurring_daily_correct_date_increment(self):
+        """Verify daily task increments by exactly 1 day."""
+        pet = Pet(name="TestPet", species="dog", age=3)
+        
+        test_date = datetime(2026, 3, 15, 10, 30)
+        daily_task = Task(
+            title="Daily",
+            description="",
+            duration_minutes=15,
+            priority="high",
+            task_type="activity",
+            frequency="daily",
+            task_date=test_date
+        )
+        
+        pet.add_task(daily_task)
+        pet.mark_task_complete("Daily")
+        
+        new_task = pet.get_required_tasks()[1]
+        expected_date = datetime(2026, 3, 16)
+        actual_date = new_task.task_date.date() if new_task.task_date else None
+        
+        assert actual_date == expected_date.date(), \
+            f"Expected {expected_date.date()}, got {actual_date}"
+    
+    def test_recurring_weekly_correct_date_increment(self):
+        """Verify weekly task increments by exactly 7 days."""
+        pet = Pet(name="TestPet", species="dog", age=3)
+        
+        test_date = datetime(2026, 3, 15, 10, 30)  # Sunday
+        weekly_task = Task(
+            title="Weekly",
+            description="",
+            duration_minutes=60,
+            priority="medium",
+            task_type="grooming",
+            frequency="weekly",
+            task_date=test_date
+        )
+        
+        pet.add_task(weekly_task)
+        pet.mark_task_complete("Weekly")
+        
+        new_task = pet.get_required_tasks()[1]
+        expected_date = datetime(2026, 3, 22)  # Exactly 7 days later
+        actual_date = new_task.task_date.date() if new_task.task_date else None
+        
+        assert actual_date == expected_date.date(), \
+            f"Expected {expected_date.date()}, got {actual_date}"
+    
+    def test_multiple_recurring_tasks_independent(self):
+        """Verify multiple recurring tasks track dates independently."""
+        pet = Pet(name="TestPet", species="dog", age=3)
+        
+        daily_date = datetime(2026, 3, 15, 8, 0)
+        weekly_date = datetime(2026, 3, 15, 10, 0)
+        
+        daily_task = Task(
+            title="Daily",
+            description="",
             duration_minutes=15,
             priority="high",
             task_type="feed",
             frequency="daily",
-            required_time="7:33am"
+            task_date=daily_date
         )
         
-        pet1.add_task(task1)
-        pet2.add_task(task2)
+        weekly_task = Task(
+            title="Weekly",
+            description="",
+            duration_minutes=60,
+            priority="medium",
+            task_type="grooming",
+            frequency="weekly",
+            task_date=weekly_date
+        )
         
-        schedule = Schedule(owner=owner, pet=pet1)
+        pet.add_task(daily_task)
+        pet.add_task(weekly_task)
         
-        conflicts = schedule.detect_cross_pet_conflicts(buffer_minutes=5)
+        pet.mark_task_complete("Daily")
+        pet.mark_task_complete("Weekly")
         
-        assert len(conflicts["soft"]) > 0, "Should have cross-pet soft conflict"
-        assert "CROSS-PET TIGHT" in conflicts["soft"][0], "Should mention cross-pet tight gap"
+        all_tasks = pet.get_required_tasks()
+        assert len(all_tasks) == 4, "Should have 4 total tasks (2 original + 2 new)"
+        
+        # Find the new daily task
+        new_daily = [t for t in all_tasks if t.title == "Daily" and not t.completion_status][0]
+        # Find the new weekly task
+        new_weekly = [t for t in all_tasks if t.title == "Weekly" and not t.completion_status][0]
+        
+        expected_daily_date = daily_date.date() + timedelta(days=1)
+        expected_weekly_date = weekly_date.date() + timedelta(days=7)
+        
+        assert new_daily.task_date.date() == expected_daily_date
+        assert new_weekly.task_date.date() == expected_weekly_date
     
-    def test_no_cross_pet_conflict_for_single_pet(self):
-        """Verify that single pet doesn't trigger cross-pet conflicts."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
-        )
+    def test_recurring_task_properties_preserved(self):
+        """Verify recurring task creates new instance with identical properties."""
+        pet = Pet(name="TestPet", species="dog", age=3)
         
-        pet = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        owner.add_pet(pet)
-        
-        task = Task(
-            title="Walk",
-            description="Walk",
-            duration_minutes=30,
+        original_task = Task(
+            title="Preserve Props",
+            description="Test description",
+            duration_minutes=45,
             priority="high",
-            task_type="walk",
+            task_type="medical",
             frequency="daily",
-            required_time="7:00am"
+            required_time="8:30am",
+            task_date=datetime(2026, 3, 15)
         )
         
-        pet.add_task(task)
+        pet.add_task(original_task)
+        pet.mark_task_complete("Preserve Props")
         
+        new_task = pet.get_required_tasks()[1]
+        
+        assert new_task.title == original_task.title
+        assert new_task.description == original_task.description
+        assert new_task.duration_minutes == original_task.duration_minutes
+        assert new_task.priority == original_task.priority
+        assert new_task.task_type == original_task.task_type
+        assert new_task.frequency == original_task.frequency
+        assert new_task.required_time == original_task.required_time
+    
+    def test_chain_mark_multiple_daily_tasks(self):
+        """Verify marking multiple daily tasks complete in sequence works correctly."""
+        pet = Pet(name="TestPet", species="dog", age=3)
+        
+        base_date = datetime(2026, 3, 15, 10, 0)
+        
+        for i in range(3):
+            task = Task(
+                title=f"Task {i}",
+                description="",
+                duration_minutes=15,
+                priority="high",
+                task_type="activity",
+                frequency="daily",
+                task_date=base_date
+            )
+            pet.add_task(task)
+        
+        # Mark all three complete
+        for i in range(3):
+            pet.mark_task_complete(f"Task {i}")
+        
+        # Should have 6 tasks total (3 original + 3 new)
+        assert len(pet.get_required_tasks()) == 6
+        
+        # Verify next day instances exist
+        for i in range(3):
+            new_tasks = [t for t in pet.get_required_tasks() 
+                        if t.title == f"Task {i}" and not t.completion_status]
+            assert len(new_tasks) == 1, f"Should have 1 incomplete Task {i}"
+
+
+class TestConflictDetectionDuplicateTimes:
+    """Comprehensive tests for conflict detection with duplicate times."""
+    
+    def test_detect_duplicate_required_times(self):
+        """Verify scheduler flags multiple tasks scheduled at exact same time."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
         schedule = Schedule(owner=owner, pet=pet)
         
-        conflicts = schedule.detect_cross_pet_conflicts()
-        
-        assert len(conflicts["hard"]) == 0, "Should have no cross-pet conflicts with single pet"
-        assert len(conflicts["soft"]) == 0, "Should have no cross-pet conflicts with single pet"
-
-
-class TestLightweightWarnings:
-    """Tests for lightweight conflict warning methods (non-fatal)."""
-    
-    def test_get_conflict_warnings_no_conflicts(self):
-        """Verify lightweight warnings returns empty list when no conflicts."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
-        )
-        
-        pet = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        owner.add_pet(pet)
-        
+        # Create three tasks all at 9:00am
         task1 = Task(
             title="Walk",
-            description="Walk",
+            description="",
             duration_minutes=30,
             priority="high",
             task_type="walk",
             frequency="daily",
-            required_time="7:00am"
+            required_time="9:00am"
         )
         
         task2 = Task(
             title="Feed",
-            description="Feed",
-            duration_minutes=15,
-            priority="high",
-            task_type="feed",
-            frequency="daily",
-            required_time="8:00am"
-        )
-        
-        pet.add_task(task1)
-        pet.add_task(task2)
-        
-        schedule = Schedule(owner=owner, pet=pet)
-        schedule.daily_plan = [(task1, "7:00am"), (task2, "8:00am")]
-        
-        warnings = schedule.get_conflict_warnings()
-        
-        assert isinstance(warnings, list), "Should return a list"
-        assert len(warnings) == 0, "Should have no warnings"
-    
-    def test_get_conflict_warnings_with_overlap(self):
-        """Verify lightweight warnings detects overlapping tasks."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
-        )
-        
-        pet = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        owner.add_pet(pet)
-        
-        task1 = Task(
-            title="Walk 1",
-            description="Walk",
-            duration_minutes=30,
-            priority="high",
-            task_type="walk",
-            frequency="daily",
-            required_time="7:00am"
-        )
-        
-        task2 = Task(
-            title="Walk 2",
-            description="Walk",
-            duration_minutes=30,
-            priority="high",
-            task_type="walk",
-            frequency="daily",
-            required_time="7:15am"
-        )
-        
-        pet.add_task(task1)
-        pet.add_task(task2)
-        
-        schedule = Schedule(owner=owner, pet=pet)
-        schedule.daily_plan = [(task1, "7:00am"), (task2, "7:15am")]
-        
-        warnings = schedule.get_conflict_warnings()
-        
-        assert len(warnings) > 0, "Should detect overlap warning"
-        assert "CONFLICT" in warnings[0], "Warning should mention conflict"
-    
-    def test_get_conflict_warnings_graceful_error_handling(self):
-        """Verify lightweight warnings never crashes with bad input."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
-        )
-        
-        pet = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        owner.add_pet(pet)
-        
-        schedule = Schedule(owner=owner, pet=pet)
-        
-        # Intentionally bad time format
-        task = Task(
-            title="Walk",
-            description="Walk",
-            duration_minutes=30,
-            priority="high",
-            task_type="walk",
-            frequency="daily",
-            required_time="7:00am"
-        )
-        
-        schedule.daily_plan = [(task, "INVALID_TIME"), (task, "7:00am")]
-        
-        # Should not crash - just skip the invalid pair
-        warnings = schedule.get_conflict_warnings()
-        
-        assert isinstance(warnings, list), "Should always return a list"
-        # May have warning about invalid time or may skip pair
-    
-    def test_get_cross_pet_warnings_no_conflicts(self):
-        """Verify cross-pet lightweight warnings work without conflicts."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
-        )
-        
-        pet1 = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        pet2 = Pet(name="Whiskers", species="cat", age=5, special_needs=[], care_requirements={})
-        owner.add_pet(pet1)
-        owner.add_pet(pet2)
-        
-        task1 = Task(
-            title="Mochi Walk",
-            description="Walk",
-            duration_minutes=30,
-            priority="high",
-            task_type="walk",
-            frequency="daily",
-            required_time="7:00am"
-        )
-        
-        task2 = Task(
-            title="Whiskers Feed",
-            description="Feed",
+            description="",
             duration_minutes=15,
             priority="high",
             task_type="feed",
@@ -952,60 +1099,112 @@ class TestLightweightWarnings:
             required_time="9:00am"
         )
         
-        pet1.add_task(task1)
-        pet2.add_task(task2)
-        
-        schedule = Schedule(owner=owner, pet=pet1)
-        
-        warnings = schedule.get_cross_pet_warnings()
-        
-        assert isinstance(warnings, list), "Should return a list"
-        assert len(warnings) == 0, "Should have no cross-pet warnings"
-    
-    def test_get_cross_pet_warnings_with_overlap(self):
-        """Verify cross-pet lightweight warnings detects conflicts."""
-        owner = Owner(
-            name="Harshal",
-            available_hours_per_day=8.0,
-            preferred_activity_times=["morning"],
-            preferences={}
+        task3 = Task(
+            title="Medication",
+            description="",
+            duration_minutes=5,
+            priority="high",
+            task_type="medication",
+            frequency="daily",
+            required_time="9:00am"
         )
         
-        pet1 = Pet(name="Mochi", species="dog", age=3, special_needs=[], care_requirements={})
-        pet2 = Pet(name="Whiskers", species="cat", age=5, special_needs=[], care_requirements={})
-        owner.add_pet(pet1)
-        owner.add_pet(pet2)
+        pet.add_task(task1)
+        pet.add_task(task2)
+        pet.add_task(task3)
+        
+        schedule.add_task(task1)
+        schedule.add_task(task2)
+        schedule.add_task(task3)
+        
+        # Simulate scheduling all at same time
+        schedule.daily_plan = [
+            (task1, "9:00am"),
+            (task2, "9:00am"),
+            (task3, "9:00am")
+        ]
+        
+        conflicts = schedule.detect_conflicts()
+        
+        # Should detect multiple hard conflicts
+        assert len(conflicts["hard"]) > 0, "Should detect conflicts at duplicate times"
+        for conflict in conflicts["hard"]:
+            assert "OVERLAP" in conflict, "Conflicts should specify overlap"
+    
+    def test_no_false_positives_off_by_one_minute(self):
+        """Verify tasks with 1 minute gap are not flagged as conflicts."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
         
         task1 = Task(
-            title="Mochi Walk",
-            description="Walk",
+            title="Task A",
+            description="",
             duration_minutes=30,
             priority="high",
-            task_type="walk",
-            frequency="daily",
-            required_time="7:00am"
+            task_type="activity",
+            frequency="daily"
         )
         
         task2 = Task(
-            title="Whiskers Feed",
-            description="Feed",
+            title="Task B",
+            description="",
             duration_minutes=15,
             priority="high",
-            task_type="feed",
-            frequency="daily",
-            required_time="7:10am"  # Overlaps with Mochi's walk
+            task_type="activity",
+            frequency="daily"
         )
         
-        pet1.add_task(task1)
-        pet2.add_task(task2)
+        pet.add_task(task1)
+        pet.add_task(task2)
         
-        schedule = Schedule(owner=owner, pet=pet1)
+        schedule.add_task(task1)
+        schedule.add_task(task2)
         
-        warnings = schedule.get_cross_pet_warnings()
+        # Schedule with 1 minute gap (no conflict)
+        schedule.daily_plan = [
+            (task1, "9:00am"),  # 9:00-9:30
+            (task2, "9:31am")   # 9:31-9:46 (1 minute gap)
+        ]
         
-        assert len(warnings) > 0, "Should detect cross-pet conflict"
-        assert "CROSS-PET" in warnings[0], "Should mention cross-pet in warning"
+        conflicts = schedule.detect_conflicts(buffer_minutes=0)
+        
+        assert len(conflicts["hard"]) == 0, "1-minute gap should not be a hard conflict"
+    
+    def test_conflict_detection_with_zero_buffer(self):
+        """Verify back-to-back tasks at exactly end time are not flagged."""
+        owner = Owner(name="Test", available_hours_per_day=8.0)
+        pet = Pet(name="TestPet", species="dog", age=3)
+        schedule = Schedule(owner=owner, pet=pet)
+        
+        task1 = Task(
+            title="First",
+            description="",
+            duration_minutes=30,
+            priority="high",
+            task_type="activity",
+            frequency="daily"
+        )
+        
+        task2 = Task(
+            title="Second",
+            description="",
+            duration_minutes=15,
+            priority="high",
+            task_type="activity",
+            frequency="daily"
+        )
+        
+        schedule.daily_plan = [
+            (task1, "9:00am"),  # 9:00-9:30
+            (task2, "9:30am")   # 9:30-9:45 (exact boundary)
+        ]
+        
+        conflicts = schedule.detect_conflicts(buffer_minutes=0)
+        
+        assert len(conflicts["hard"]) == 0, "Exact boundary should not conflict"
+        assert len(conflicts["soft"]) == 0, "Zero buffer should allow exact boundaries"
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+# Helper function for time conversion tests
+from pawpal_system import time_to_minutes

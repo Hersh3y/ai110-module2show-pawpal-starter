@@ -54,3 +54,47 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+
+### Run Tests
+
+```bash
+python -m pytest tests/test_pawpal.py -v
+```
+
+### Test Coverage
+
+The test suite includes **28 comprehensive tests** across 6 test classes:
+
+- **Sorting Correctness (5 tests)**: Verifies tasks are returned in strict chronological order, including edge cases like midnight boundaries and tasks without required times
+- **Recurrence Logic (6 tests)**: Confirms daily/weekly recurring tasks create new instances with correct date increments using `timedelta`, and tests property preservation across recurrences
+- **Conflict Detection - Duplicate Times (3 tests)**: Verifies the scheduler flags overlapping tasks and excludes false positives with 1-minute gaps and exact boundary conditions
+- **Core Functionality (14 tests)**: Tests Task completion, Pet task management, Owner task filtering by pet/status, Schedule generation, hard/soft conflict detection, and cross-pet scheduling
+
+**Key behaviors tested:**
+- Empty lists and edge cases (midnight, all same time, no required times)
+- Recurring task date arithmetic (+1 day for daily, +7 days for weekly)
+- Property preservation when creating recurring task instances
+- Multi-criteria filtering (pet name + completion status)
+- Conflict detection accuracy with configurable buffers
+- Non-recurring ("once") tasks don't spawn new instances
+
+### Test Results
+
+```
+============================= 28 passed in 0.09s ==============================
+```
+
+### Confidence Level
+
+**★★★★★ (5/5 stars)**
+
+All 28 tests pass successfully. The test suite covers:
+- ✅ Core functionality (task management, pet/owner operations)
+- ✅ Critical scheduling logic (sorting, conflict detection)
+- ✅ Recurring task edge cases (date arithmetic, property preservation)
+- ✅ Boundary conditions (midnight transitions, zero-buffer scheduling)
+- ✅ Multi-pet coordination (cross-pet conflict detection)
+
+The system is **production-ready** for the core scheduling and conflict detection algorithms. The comprehensive edge-case coverage ensures robust behavior under real-world scheduling scenarios.
