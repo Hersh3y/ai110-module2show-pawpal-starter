@@ -128,7 +128,7 @@ else:
 st.divider()
 
 st.subheader("Build Schedule")
-st.caption("This button should call your scheduling logic once you implement it.")
+st.caption("Generate an optimized schedule with intelligent sorting and conflict detection.")
 
 if st.button("Generate schedule"):
     # Validate that owner and pet exist, and that there are tasks
@@ -152,8 +152,44 @@ if st.button("Generate schedule"):
         # Wire to Schedule.generate_schedule(): create the optimized plan
         schedule.generate_schedule()
         
-        # Wire to Schedule.get_plan_with_reasoning(): display the results
         st.success("✅ Schedule generated successfully!")
+        
+        # Display tasks sorted by time
+        st.markdown("#### Tasks Sorted by Time")
+        sorted_by_time = schedule.sort_by_time()
+        time_table_data = [
+            {
+                "Task": task.title,
+                "Time": task.required_time or "Flexible",
+                "Duration (min)": task.duration_minutes,
+                "Priority": task.priority,
+                "Type": task.task_type
+            }
+            for task in sorted_by_time
+        ]
+        st.table(time_table_data)
+        
+        # Display conflict warnings
+        conflict_warnings = schedule.get_conflict_warnings()
+        if conflict_warnings:
+            st.markdown("#### ⚠️ Scheduling Warnings")
+            for warning in conflict_warnings:
+                st.warning(warning)
+        else:
+            st.markdown("#### ✅ No scheduling conflicts detected")
+        
+        # Display cross-pet warnings if multiple pets
+        if len(st.session_state.owner.pets) > 1:
+            cross_pet_warnings = schedule.get_cross_pet_warnings()
+            st.markdown("#### Cross-Pet Coordination")
+            if cross_pet_warnings:
+                for warning in cross_pet_warnings:
+                    st.warning(warning)
+            else:
+                st.success("No cross-pet conflicts detected")
+        
+        # Display the full plan with reasoning
+        st.markdown("#### Full Daily Plan")
         st.write(schedule.get_plan_with_reasoning())
         
         # Store in session state for potential future use/export

@@ -22,6 +22,42 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Features
+
+### Core Task Management
+- **Task Creation & Tracking** — Define pet care tasks with title, description, duration, priority, type, and frequency
+- **Multi-Pet Management** — Organize and track tasks across multiple animals per owner
+- **Completion Status Tracking** — Mark tasks as complete/incomplete with persistent state
+
+### Intelligent Scheduling
+- **Priority-Based Sorting** — Ranks tasks by urgency (time-sensitive first), priority level (high → medium → low), and duration (longest first)
+- **Chronological Time Sorting** — Orders tasks by required time (e.g., "7:00am" before "12:00pm"); places flexible tasks at the end
+- **Time-Slot Validation** — Respects operating hours (e.g., 6:00am–10:00pm) and owner availability constraints
+- **Schedule Generation** — Builds an optimized daily plan that respects all constraints and time-sensitive requirements
+
+### Flexible Task Filtering
+- **Multi-Criteria Filtering** — Filter tasks by pet name, completion status, or both criteria combined
+- **Aggregate Task Retrieval** — Fetch all tasks across all pets or specific subsets
+
+### Recurring Task Management
+- **Auto-Recurrence Creation** — Automatically spawns next instance of daily/weekly tasks when marked complete
+- **Accurate Date Arithmetic** — Uses Python `timedelta` for precise date calculations (+1 day for daily, +7 days for weekly)
+- **Property Preservation** — Recurring task instances inherit all properties (duration, priority, type, required time) from the original
+
+### Conflict Detection & Warnings
+- **Hard Conflict Detection** — Identifies directly overlapping scheduled tasks with time and duration details
+- **Soft Conflict Detection** — Flags tasks with tight scheduling gaps (configurable buffer, default 5 minutes)
+- **Lightweight Conflict Warnings** — Non-fatal warning system that gracefully handles time-parsing errors without crashing
+- **Cross-Pet Scheduling** — Detects conflicts across multiple pets to ensure owner can realistically manage the full schedule
+
+### Schedule Explanation
+- **Plan with Reasoning** — Displays daily plan with time, duration, task type, and priority for each scheduled task
+- **Human-Readable Output** — Formats schedule clearly with owner name, pet name, available hours, and total task count
+
+## 📸 Demo
+
+<a href="/course_images/ai110/demo.png" target="_blank"><img src='/course_images/ai110/demo.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
 ## Smarter Scheduling
 
 PawPal+ implements sophisticated scheduling algorithms and conflict detection:

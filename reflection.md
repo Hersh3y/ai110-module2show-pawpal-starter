@@ -59,12 +59,18 @@ Your final app should:
 **a. How you used AI**
 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
+    I used AI for brainstorming scheduling algorithms, Implementing specific features like sort_by_time() with lambda functions, Designing conflict detection logic, Code review and optimization suggestions, Debugging time parsing edge cases.
+
 - What kinds of prompts or questions were most helpful?
+    Most helpful were specific, actionable prompts like "How would you implement sorting with lambda?" and "How could this algorithm be simplified?" and brainstorming prompts like "suggest scheduling algorithms" also provided good direction.
 
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
+    When reviewing sort_by_time(), AI suggested a more "Pythonic" version using tuple comparison: key=lambda task: (task.required_time is None, time_to_minutes(...) if task.required_time else 0). This was cleverer but less readable.
+
 - How did you evaluate or verify what the AI suggested?
+    I compared readability for future developers. The current version is less confusing and is immediately understandable. The Pythonic version that requires explaining due to its complexity.
 
 ---
 
@@ -73,12 +79,18 @@ Your final app should:
 **a. What you tested**
 
 - What behaviors did you test?
+    Sorting tasks chronologically by time, Filtering tasks by pet name and completion status, Recurring daily/weekly task auto-creation with accurate date math, conflict detection
+
 - Why were these tests important?
+    These are the core features that the users rely on. Sorting and filtering ensure correct task retrieval. Conflict detection validates the schedule is usable. Testing both detailed and lightweight approaches ensures graceful error handling.
 
 **b. Confidence**
 
 - How confident are you that your scheduler works correctly?
+    Very confident. All 28 tests pass including edge cases: empty task lists, malformed time strings, non-existent tasks, no conflicts, multiple conflicts. The lightweight warnings never crash even with bad input.
+
 - What edge cases would you test next if you had more time?
+    Tasks with 0-minute duration, owners with 0 available hours, timezone handling, tasks scheduled at midnight (00:00)
 
 ---
 
@@ -87,11 +99,15 @@ Your final app should:
 **a. What went well**
 
 - What part of this project are you most satisfied with?
+    Seeing all 28 test cases pass.
 
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
+    Move conflict detection into generation (prevent invalid plans rather than just warn), Add constraint propagation for dependencies (if Task A must happen before Task B, prioritize it), Implement actual optimization algorithms, Add task flexibility.
 
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+    Spending time planning a clear class design and backend logic prevents major problems later on. AI is most valuable for brainstorming and code validation, but maintaining human judgment about readability, simplicity, and architectural tradeoffs is essential.
+    

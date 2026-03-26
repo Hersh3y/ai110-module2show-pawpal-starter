@@ -1,32 +1,12 @@
 classDiagram
-    class Owner {
-        -name: str
-        -available_hours_per_day: float
-        -preferred_activity_times: list
-        -preferences: dict
-        -pets: list
-        +add_pet(pet) void
-        +get_all_tasks() list
-        +filter_tasks(pet_name, completion_status) list
-        +get_available_time() float
-        +get_preference(key) any
-        +set_preference(key, value) void
+    %% Utility Functions
+    class TimeFunctions {
+        +parse_time(time_str) datetime
+        +time_to_minutes(time_str) int
+        +minutes_to_time(minutes) str
     }
 
-    class Pet {
-        -name: str
-        -species: str
-        -age: int
-        -special_needs: list
-        -care_requirements: dict
-        -tasks: list
-        +get_required_tasks() list
-        +add_task(task) void
-        +mark_task_complete(task_title) bool
-        +add_special_need(need) void
-        +get_health_info() str
-    }
-
+    %% Core Domain Classes
     class Task {
         -title: str
         -description: str
@@ -34,36 +14,73 @@ classDiagram
         -priority: str
         -task_type: str
         -frequency: str
-        -required_time: str
+        -required_time: Optional[str]
         -completion_status: bool
-        -dependencies: list
-        -task_date: datetime
+        -dependencies: List[str]
+        -task_date: Optional[datetime]
         +get_duration() int
         +is_urgent() bool
         +mark_complete() void
     }
 
+    class Pet {
+        -name: str
+        -species: str
+        -age: int
+        -special_needs: List[str]
+        -care_requirements: Dict[str, Any]
+        -tasks: List[Task]
+        +get_required_tasks() List[Task]
+        +add_task(task) void
+        +add_special_need(need) void
+        +mark_task_complete(task_title) bool
+        +get_health_info() str
+    }
+
+    class Owner {
+        -name: str
+        -available_hours_per_day: float
+        -preferred_activity_times: List[str]
+        -preferences: Dict[str, Any]
+        -pets: List[Pet]
+        +add_pet(pet) void
+        +get_all_tasks() List[Task]
+        +filter_tasks(pet_name, completion_status) List[Task]
+        +get_available_time() float
+        +get_preference(key) Any
+        +set_preference(key, value) void
+    }
+
+    %% Scheduling & Conflict Detection
     class Schedule {
         -owner: Owner
         -pet: Pet
-        -tasks: list
-        -daily_plan: list
+        -tasks: List[Task]
+        -daily_plan: List~(Task, str)~
         -start_time: str
         -end_time: str
+        -start_minutes: int
+        -end_minutes: int
         +add_task(task) void
-        +sort_by_time() list
-        -_sort_tasks_by_priority() list
-        +generate_schedule() list
-        +can_schedule_at(task, time) bool
+        +sort_by_time() List[Task]
+        -_sort_tasks_by_priority() List[Task]
+        +generate_schedule() List~(Task, str)~
+        +can_schedule_at(task, time_minutes) bool
         +get_plan_with_reasoning() str
-        +detect_conflicts(buffer_minutes) dict
-        +get_conflict_warnings(buffer_minutes) list
-        +detect_cross_pet_conflicts(buffer_minutes) dict
-        +get_cross_pet_warnings(buffer_minutes) list
+        +detect_conflicts(buffer_minutes) Dict[str, List[str]]
+        +get_conflict_warnings(buffer_minutes) List[str]
+        +detect_cross_pet_conflicts(buffer_minutes) Dict[str, List[str]]
+        +get_cross_pet_warnings(buffer_minutes) List[str]
     }
 
-    Owner "1" --> "*" Pet: has
-    Pet "1" --> "*" Task: requires
-    Schedule --> Owner: uses constraints
-    Schedule --> Pet: schedules for
-    Schedule --> Task: arranges
+    %% Relationships
+    Owner "1" --> "*" Pet : owns
+    Pet "1" --> "*" Task : contains
+    Task --> Task : dependencies (self-ref)
+    
+    Schedule --> Owner : constrains_based_on
+    Schedule --> Pet : schedules_for
+    Schedule --> Task : arranges
+    
+    Owner --> Task : filters_across_pets
+    Pet --> Schedule : generates_schedule_for
